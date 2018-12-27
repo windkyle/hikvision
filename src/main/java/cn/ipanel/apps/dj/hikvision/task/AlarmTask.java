@@ -8,7 +8,6 @@ import com.google.gson.reflect.TypeToken;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -18,13 +17,12 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.Key;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -67,15 +65,17 @@ public class AlarmTask {
         while (true) {
             AlarmBean bean = new AlarmBean();
             try {
+                logger.info("waiting alarmQueueData");
                 bean = alarmQueue.take();
+                logger.info("get data from alarmQueueData");
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
             try {
-                logger.info("some one sign in at:{}, card number:{}",
+                logger.info("some one sign in at:{}, card number:{}, device:{}",
                         bean.getTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
-                        bean.getCard());
-                RedisAlarmBean redisAlarmBean = new RedisAlarmBean(bean, systemConfig.getDevice());
+                        bean.getCard(), bean.getDevice());
+                RedisAlarmBean redisAlarmBean = new RedisAlarmBean(bean);
                 myRedisService.saveNotExportAlarm(redisAlarmBean);
                 exportAlarm(redisAlarmBean);
             } catch (Exception e) {
@@ -120,7 +120,7 @@ public class AlarmTask {
      */
     @Async("myAsync")
     public void exportAlarmWithStartUp() {
-        List<RedisAlarmBean> list = myRedisService.getNotExportAlarm(systemConfig.getDevice());
+        List<RedisAlarmBean> list = myRedisService.getNotExportAlarm();
         if (list.isEmpty()) {
             logger.info("no info need to export");
             return;
@@ -134,7 +134,7 @@ public class AlarmTask {
     /**
      * 每30分钟初始化设备重新布防监听
      */
-    @Scheduled(cron = "0 */30 * * * *")
+    @Scheduled(cron = "0 */30 * * * *")//@Scheduled(cron = "0 */5 * * * *")
     public void initAgain() {
         logger.info("init again {}", Globals.formatDateTime(LocalDateTime.now()));
         initAginMethod();
@@ -148,7 +148,7 @@ public class AlarmTask {
         logger.info("batch export again {}", Globals.formatDateTime(LocalDateTime.now()));
         alarmBeanMap.forEach((key, value) -> {
             alarmBeanMap.remove(key);
-            exportAlarm(new RedisAlarmBean(value, systemConfig.getDevice()));
+            exportAlarm(new RedisAlarmBean(value));
         });
     }
 
@@ -169,14 +169,78 @@ public class AlarmTask {
             }
         }
     }
-
     /**
      * 每2小时保存一次数据到文件中
      */
     @Scheduled(cron = "0 0 */2 * * *")
     public void saveData() {
         logger.info("save info to hd, {}", Globals.formatDateTime(LocalDateTime.now()));
-        List<RedisAlarmBean> list = myRedisService.getAlarm(systemConfig.getDevice());
+        List<RedisAlarmBean> list = myRedisService.getAlarm();
+        list.stream().collect(Collectors.groupingBy(info -> info.getTime().getYear())).forEach((key, value) -> {
+            value.stream().collect(Collectors.groupingBy(info -> info.getTime().getMonthValue())).forEach((key1, value1) -> {
+                value1.stream().collect(Collectors.groupingBy(info -> info.getTime().getDayOfMonth())).forEach( (key2, value2) -> {
+                    value2.stream().collect(Collectors.groupingBy(info -> info.getDevice())).forEach((key3, value3)  ->{
+                        logger.info("start save {}-{}-{} devie {} data to HD", key, key1, key2, key3);
+                        String folderPath = systemConfig.getDataSavePath() + "/hikvision/" + key + "/" + key1 + "/" + key2;
+                        File folder = new File(folderPath);
+                        if (!folder.exists() && !folder.mkdirs()) {
+                            logger.error("folder {} not exists or can't create folder!", folderPath);
+                            return;
+                        }
+                        String filePath = folderPath + "/" + key3 + dataFileName;
+                        File dataFile = new File(filePath);
+                        List<HdAlarmInfoBean> hdList = null;
+                        if (!dataFile.exists()) {
+                            try {
+                                if (!dataFile.createNewFile()) {
+                                    throw new Exception("create data file failed");
+                                }
+                                hdList = new ArrayList<>(10);
+                            } catch (Exception e) {
+                                logger.error("create data file {} error: {}", filePath, e.getMessage());
+                                return;
+                            }
+                        } else {
+                            try {
+                                String text = Files.lines(Paths.get(filePath), StandardCharsets.UTF_8).collect(Collectors.joining());
+                                hdList = gson.fromJson(text, new TypeToken<List<HdAlarmInfoBean>>(){}.getType());
+                            } catch (IOException e) {
+                                logger.error("read file {} error: {}", filePath, e.getMessage());
+                                return;
+                            }
+                        }
+                        hdList.addAll(value3.stream().map(HdAlarmInfoBean::new).collect(Collectors.toList()));
+                        List<String> redisKeys = value3.stream().map(Globals::makeRedisKey).collect(Collectors.toList());
+                        OutputStream outputStream = null;
+                        try {
+                            outputStream = new FileOutputStream(dataFile);
+                            outputStream.write(gson.toJson(hdList).getBytes());
+                            outputStream.close();
+                            myRedisService.removeAlarm(redisKeys);
+                            logger.info("save {}-{}-{} devie {} data to HD success", key, key1, key2, key3);
+                        } catch (Exception e) {
+                            if (null != outputStream){
+                                try {
+                                    outputStream.close();
+                                } catch (IOException e1) {
+                                }
+                            }
+                            logger.info("write to file {} error {}", filePath, e.getMessage());
+                            return;
+                        }
+
+                    });
+                });
+            });
+        });
+    }
+    /**
+     * 每2小时保存一次数据到文件中
+     */
+    //@Scheduled(cron = "0 0 */2 * * *")
+/*    public void saveData() {
+        logger.info("save info to hd, {}", Globals.formatDateTime(LocalDateTime.now()));
+        List<RedisAlarmBean> list = myRedisService.getAlarm();
         list.stream().collect(Collectors.groupingBy(info -> info.getTime().getYear())).forEach((key, value) -> {
             value.stream().collect(Collectors.groupingBy(info -> info.getTime().getMonthValue())).forEach((key1, value1) -> {
                 value1.stream().collect(Collectors.groupingBy(info -> info.getTime().getDayOfMonth())).forEach( (key2, value2) -> {
@@ -231,5 +295,5 @@ public class AlarmTask {
                 });
             });
         });
-    }
+    }   */
 }

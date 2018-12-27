@@ -21,6 +21,8 @@ public class SystemConfig {
     private String dataSavePath;
     @Value("${runtime}")
     private Integer runtime;
+    @Value("${hikvision.config.location}")
+    private String hikvisionConfigLocation;
 
     public Integer getRuntime() {
         return runtime;
@@ -88,4 +90,12 @@ public class SystemConfig {
 
     public SystemConfig() {
     }
+    public String getHikvisionConfigLocation() {
+        return hikvisionConfigLocation;
+    }
+
+    public void setHikvisionConfigLocation(String hikvisionConfigLocation) {
+        this.hikvisionConfigLocation = hikvisionConfigLocation;
+    }
+
 }

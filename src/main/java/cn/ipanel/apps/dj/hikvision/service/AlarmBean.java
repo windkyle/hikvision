@@ -14,6 +14,17 @@ public class AlarmBean {
     private String card;
     private LocalDateTime time;
     private Long longTime;
+    private String device;
+    private String IUserID;
+
+
+    public String getIUserID() {
+        return IUserID;
+    }
+
+    public void setIUserID(String IUserID) {
+        this.IUserID = IUserID;
+    }
 
     public Long getLongTime() {
         return longTime;
@@ -39,10 +50,19 @@ public class AlarmBean {
         this.time = time;
     }
 
+    public String getDevice() {
+        return device;
+    }
+
+    public void setDevice(String device) {
+        this.device = device;
+    }
+
+
     public AlarmBean() {
     }
 
-    public AlarmBean(String card, HCNetSDK.NET_DVR_TIME netDvrTime) {
+    public AlarmBean(String card, HCNetSDK.NET_DVR_TIME netDvrTime,String device) {
         this.card = card;
         time = LocalDateTime.of(
                 netDvrTime.dwYear,
@@ -53,6 +73,7 @@ public class AlarmBean {
                 netDvrTime.dwSecond
         );
         longTime = time.toEpochSecond(OffsetDateTime.now().getOffset());
+        this.device=device;
     }
 
     @Override

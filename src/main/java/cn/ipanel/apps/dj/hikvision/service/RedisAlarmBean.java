@@ -3,7 +3,7 @@ package cn.ipanel.apps.dj.hikvision.service;
 public class RedisAlarmBean extends AlarmBean {
     private Boolean hasExprotToExternalSystem;
     private Long exportToExternalSystemTime;
-    private String device;
+/*    private String device;
 
     public String getDevice() {
         return device;
@@ -11,7 +11,7 @@ public class RedisAlarmBean extends AlarmBean {
 
     public void setDevice(String device) {
         this.device = device;
-    }
+    }*/
 
     public Boolean getHasExprotToExternalSystem() {
         return hasExprotToExternalSystem;
@@ -29,11 +29,12 @@ public class RedisAlarmBean extends AlarmBean {
         this.exportToExternalSystemTime = exportToExternalSystemTime;
     }
 
-    public RedisAlarmBean(AlarmBean bean, String device) {
+    public RedisAlarmBean(AlarmBean bean) {
         super.setCard(bean.getCard());
         super.setTime(bean.getTime());
         super.setLongTime(bean.getLongTime());
+        super.setDevice(bean.getDevice());
         this.hasExprotToExternalSystem = false;
-        this.device = device;
+        //this.device = device;
     }
 }

@@ -36,24 +36,28 @@ public class MyRedisService {
         redisTemplate.opsForHash().delete(notExportRedisKey, Globals.makeRedisKey(bean));
     }
 
-    public List<RedisAlarmBean> getNotExportAlarm(String device) {
+    public List<RedisAlarmBean> getNotExportAlarm() {
         List<RedisAlarmBean> list = new ArrayList<>(10);
         redisTemplate.opsForHash().values(notExportRedisKey).forEach( object -> {
             RedisAlarmBean alarmBean = gson.fromJson(object.toString(), RedisAlarmBean.class);
-            if (alarmBean.getDevice().equals(device)) {
+/*            if (alarmBean.getDevice().equals(device)) {
+                list.add(alarmBean);
+            }*/
+            if(!alarmBean.getHasExprotToExternalSystem()){
                 list.add(alarmBean);
             }
         });
         return list;
     }
 
-    public List<RedisAlarmBean> getAlarm(String device) {
+    public List<RedisAlarmBean> getAlarm() {
         List<RedisAlarmBean> list = new ArrayList<>(200);
         redisTemplate.opsForHash().values(redisKey).forEach(object -> {
             RedisAlarmBean alarmBean = gson.fromJson(object.toString(), RedisAlarmBean.class);
-            if (alarmBean.getDevice().equals(device)) {
+/*            if (alarmBean.getDevice().equals(device)) {
                 list.add(alarmBean);
-            }
+            }*/
+
         });
         return list;
     }

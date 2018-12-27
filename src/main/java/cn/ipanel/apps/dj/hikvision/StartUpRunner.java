@@ -1,5 +1,6 @@
 package cn.ipanel.apps.dj.hikvision;
 
+import cn.ipanel.apps.dj.hikvision.config.HikvisionClientConfig;
 import cn.ipanel.apps.dj.hikvision.config.SystemConfig;
 import cn.ipanel.apps.dj.hikvision.service.MyService;
 import cn.ipanel.apps.dj.hikvision.task.AlarmTask;
@@ -12,6 +13,7 @@ import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import java.lang.reflect.Field;
+import java.util.List;
 
 @Component
 @Order(value = 1)
