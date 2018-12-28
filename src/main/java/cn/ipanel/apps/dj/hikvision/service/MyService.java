@@ -3,7 +3,6 @@ package cn.ipanel.apps.dj.hikvision.service;
 import cn.ipanel.apps.dj.hikvision.HCNetSDK;
 import cn.ipanel.apps.dj.hikvision.config.HikvisionClientConfig;
 import cn.ipanel.apps.dj.hikvision.config.SystemConfig;
-import com.google.gson.Gson;
 import com.sun.jna.Native;
 import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
@@ -53,11 +52,6 @@ public class MyService {
 
     static {
         hikvisionConfigs=HikvisionClientConfig.getClientConfig();
-/*        HikvisionClientConfig hikvisionClientConfig = new HikvisionClientConfig();
-        hikvisionConfigs=hikvisionClientConfig.getClientConfig(config.getHikvisionConfigLocation());
-        for(HikvisionClientConfig config:hikvisionConfigs){
-            logger.info("Ö¸ÎÆ»ú¿¨ºÅ£º"+config.getDevice()+"**ip:"+config.getHikvision_ip());
-        }*/
     }
 
 
@@ -93,8 +87,9 @@ public class MyService {
             for(HikvisionClientConfig config:hikvisionConfigs){
                 lUserID = hCNetSDK.NET_DVR_Login_V30(config.getHikvision_ip(),
                         (short) iPort, config.getHikvision_user_name(), config.getHikvision_password(), m_strDeviceInfo);
-
-                long userID = lUserID.longValue();
+                ////
+                int userID = lUserID.intValue();
+                logger.info("userId:"+userID);
                 if (userID < 0) {//if (userID == -1) {
                     logger.info(config.getHikvision_ip()+"**login failed");
                     continue;
@@ -234,6 +229,8 @@ public class MyService {
                 strACSInfo.read();
                 if (strACSInfo.dwMinor == 38) {
                     String Iuser = pAlarmer.lUserID.toString();
+                    String ip = strACSInfo.struRemoteHostAddr.toString();
+                    logger.info("alarmDataHandle ip:"+ip);
                     AlarmBean bean = new AlarmBean(new String(strACSInfo.struAcsEventInfo.byCardNo).trim(), strACSInfo.struTime,IUserIDToDeviceMap.get(Iuser));
                     try {
                         alarmQueue.put(bean);
