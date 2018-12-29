@@ -57,7 +57,7 @@ public class MyRedisService {
 /*            if (alarmBean.getDevice().equals(device)) {
                 list.add(alarmBean);
             }*/
-
+            list.add(alarmBean);
         });
         return list;
     }
