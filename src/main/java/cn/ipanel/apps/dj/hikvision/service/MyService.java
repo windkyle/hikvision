@@ -52,9 +52,6 @@ public class MyService {
         this.hikvisionClientConfig = hikvisionClientConfig;
     }
 
-/*    static {
-        hikvisionConfigs=HikvisionClientConfig.getClientConfig();
-    }*/
 
     /**
      * 监听多个指纹打卡机
