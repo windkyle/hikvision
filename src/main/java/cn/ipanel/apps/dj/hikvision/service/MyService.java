@@ -6,6 +6,7 @@ import cn.ipanel.apps.dj.hikvision.config.SystemConfig;
 import com.sun.jna.Native;
 import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
+import org.apache.commons.codec.Charsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,31 +41,32 @@ public class MyService {
     HCNetSDK.FMSGCallBack_V31 fMSFCallBack_V31;//报警回调函数实现
 
     private BlockingQueue<AlarmBean> alarmQueue;
-    private static SystemConfig config;
-    private static List<HikvisionClientConfig> hikvisionConfigs;
-    private static Map<String,String> IUserIDToDeviceMap = new HashMap<>();
+    private SystemConfig config;
+    private HikvisionClientConfig hikvisionClientConfig;
+    private static Map<String, String> IUserIDToDeviceMap = new HashMap<>();
 
     @Autowired
-    public MyService(BlockingQueue<AlarmBean> alarmQueue, SystemConfig config) {
+    public MyService(BlockingQueue<AlarmBean> alarmQueue, SystemConfig config, HikvisionClientConfig hikvisionClientConfig) {
         this.alarmQueue = alarmQueue;
-        MyService.config = config;
+        this.config = config;
+        this.hikvisionClientConfig = hikvisionClientConfig;
     }
 
-    static {
+/*    static {
         hikvisionConfigs=HikvisionClientConfig.getClientConfig();
-    }
-
+    }*/
 
     /**
      * 监听多个指纹打卡机
+     *
      * @throws Exception
      */
     public void initDevice() throws Exception {
         try {
             if (config.getRuntime() == 32) {
-                hCNetSDK = (HCNetSDK) Native.loadLibrary( "HCNetSDK",HCNetSDK.class);
+                hCNetSDK = (HCNetSDK) Native.loadLibrary("HCNetSDK", HCNetSDK.class);
             } else if (config.getRuntime() == 64) {
-                hCNetSDK = (HCNetSDK) Native.loadLibrary( "hcnetsdk",HCNetSDK.class);
+                hCNetSDK = (HCNetSDK) Native.loadLibrary("hcnetsdk", HCNetSDK.class);
             } else {
                 throw new Exception("invalid runtime");
             }
@@ -84,23 +86,26 @@ public class MyService {
 
             m_strDeviceInfo = new HCNetSDK.NET_DVR_DEVICEINFO_V30();
             //注册所有设备
-            for(HikvisionClientConfig config:hikvisionConfigs){
+            for (HikvisionClientConfig config : hikvisionClientConfig.getClientConfig()) {
                 lUserID = hCNetSDK.NET_DVR_Login_V30(config.getHikvision_ip(),
                         (short) iPort, config.getHikvision_user_name(), config.getHikvision_password(), m_strDeviceInfo);
                 ////
                 int userID = lUserID.intValue();
-                logger.info("userId:"+userID);
+                logger.info("userId:" + userID);
                 if (userID < 0) {//if (userID == -1) {
-                    logger.info(config.getHikvision_ip()+"**login failed");
+                    logger.info(config.getHikvision_ip() + "**login failed");
                     continue;
                     //hCNetSDK.NET_DVR_Cleanup();
                     //throw new Exception("login failed - " + hCNetSDK.NET_DVR_GetLastError());
                 }
                 users.add(lUserID);
-                IUserIDToDeviceMap.put(lUserID.toString(),config.getDevice());
-                logger.info("login success: ip:"+config.getDevice()+"***ip"+config.getHikvision_ip()+"***userId :"+lUserID.toString());
+                //绑定指纹机与ip地址。由于在windows系统上测试byte可以获取完整，而在linux上发现byte[]缺了前四位，所以用ip后两位绑定指纹机序号
+                String lastIp= MyService.subString(config.getHikvision_ip(),"\\.",2);
+                logger.info("login success: ip:" + config.getDevice() + "***ip" + config.getHikvision_ip() + "***userId :" + lUserID.toString()+"**lastIp:"+lastIp);
+                IUserIDToDeviceMap.put(lastIp, config.getDevice());
+
             }
-            if(null == users || users.size() == 0){
+            if (null == users || users.size() == 0) {
                 hCNetSDK.NET_DVR_Cleanup();
                 throw new Exception("all hikvision client login failed - " + hCNetSDK.NET_DVR_GetLastError());
             }
@@ -111,17 +116,18 @@ public class MyService {
             }
 
             HCNetSDK.NET_DVR_SETUPALARM_PARAM m_strAlarmInfo = new HCNetSDK.NET_DVR_SETUPALARM_PARAM();
-            m_strAlarmInfo.dwSize=m_strAlarmInfo.size();
-            m_strAlarmInfo.byLevel=1;
-            m_strAlarmInfo.byAlarmInfoType=1;
+            m_strAlarmInfo.dwSize = m_strAlarmInfo.size();
+            m_strAlarmInfo.byLevel = 1;
+            m_strAlarmInfo.byAlarmInfoType = 1;
             m_strAlarmInfo.write();
-            for(NativeLong userId:users){
+            for (NativeLong userId : users) {
                 logger.info("{}", userId);
                 logger.info("{}", m_strAlarmInfo);
                 lAlarmHandle = hCNetSDK.NET_DVR_SetupAlarmChan_V41(userId, m_strAlarmInfo);
                 if (lAlarmHandle.intValue() == -1) {
                     throw new Exception("set alarm chan failed - " + hCNetSDK.NET_DVR_GetLastError());
-                }if(null != lAlarmHandle){
+                }
+                if (null != lAlarmHandle) {
                     lAlarmHandleList.add(lAlarmHandle);
                 }
             }
@@ -132,6 +138,25 @@ public class MyService {
         }
     }
 
+    /**
+     * 截取字符串最后两个
+     * @param string
+     * @param toTruncation
+     * @param index
+     * @return
+     */
+    private static String subString(String string,String toTruncation, int index){
+        String[] a = string.split(toTruncation);
+        String result="";
+        String b="";
+        if(a.length>0){
+            for(int i=a.length;i>a.length-index;i--){
+                b=a[i-1];
+                result=b+result;
+            }
+        }
+        return result;
+    }
    /* public void initDeviceOld() throws Exception {
         try {
             if (config.getRuntime() == 32) {
@@ -189,7 +214,7 @@ public class MyService {
     }*/
 
     private void logOut() throws Exception {
-        for(NativeLong userId:users){
+        for (NativeLong userId : users) {
             if (userId.longValue() > -1) {
                 if (!hCNetSDK.NET_DVR_Logout(userId)) {
                     throw new Exception("logout failed - " + hCNetSDK.NET_DVR_GetLastError());
@@ -201,10 +226,10 @@ public class MyService {
         hCNetSDK.NET_DVR_Cleanup();
     }
 
-    public void initAgain()throws Exception {
-        for(NativeLong lAlarmHandle1:lAlarmHandleList){
+    public void initAgain() throws Exception {
+        for (NativeLong lAlarmHandle1 : lAlarmHandleList) {
             if (lAlarmHandle1.intValue() > -1) {
-                if ( hCNetSDK.NET_DVR_CloseAlarmChan_V30(lAlarmHandle1)) {
+                if (hCNetSDK.NET_DVR_CloseAlarmChan_V30(lAlarmHandle1)) {
                 } else {
                     throw new Exception("close alarm chan failed - " + hCNetSDK.NET_DVR_GetLastError());
                 }
@@ -217,8 +242,7 @@ public class MyService {
         initDevice();
     }
 
-    public static void AlarmDataHandle(NativeLong lCommand, HCNetSDK.NET_DVR_ALARMER pAlarmer, Pointer pAlarmInfo, int dwBufLen, Pointer pUser, BlockingQueue<AlarmBean> alarmQueue)
-    {
+    public static void AlarmDataHandle(NativeLong lCommand, HCNetSDK.NET_DVR_ALARMER pAlarmer, Pointer pAlarmInfo, int dwBufLen, Pointer pUser, BlockingQueue<AlarmBean> alarmQueue) {
         //lCommand是传的报警类型
         switch (lCommand.intValue()) {
             case HCNetSDK.COMM_ALARM_ACS: //门禁主机报警信息
@@ -228,10 +252,19 @@ public class MyService {
                 pACSInfo.write(0, pAlarmInfo.getByteArray(0, strACSInfo.size()), 0, strACSInfo.size());
                 strACSInfo.read();
                 if (strACSInfo.dwMinor == 38) {
+                    //获取IuserID
                     String Iuser = pAlarmer.lUserID.toString();
-                    String ip = strACSInfo.struRemoteHostAddr.toString();
-                    logger.info("alarmDataHandle ip:"+ip);
-                    AlarmBean bean = new AlarmBean(new String(strACSInfo.struAcsEventInfo.byCardNo).trim(), strACSInfo.struTime,IUserIDToDeviceMap.get(Iuser));
+                    //获取指纹机ip地址。由于在windows系统上测试byte可以获取完整，而在linux上发现byte[]缺了前四位，所以用ip后两位绑定指纹机序号
+                    byte[] ip = pAlarmer.sDeviceIP;
+                    for (byte ab : ip) {
+                        String hex = Integer.toHexString(ab & 0xFF);
+                        System.out.print(hex + " ");
+                    }
+                    System.out.println();
+                    String tempIp = new String(ip, Charsets.UTF_8);
+                    tempIp = tempIp.replace("\n", "").trim();
+                    logger.info("alarmDataHandle Iuser:" + Iuser + "ip:" + tempIp.trim());
+                    AlarmBean bean = new AlarmBean(new String(strACSInfo.struAcsEventInfo.byCardNo).trim(), strACSInfo.struTime, IUserIDToDeviceMap.get(MyService.subString(tempIp,"\\.",2)));
                     try {
                         alarmQueue.put(bean);
                     } catch (InterruptedException e) {

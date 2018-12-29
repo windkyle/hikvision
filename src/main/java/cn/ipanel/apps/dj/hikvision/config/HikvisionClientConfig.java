@@ -3,10 +3,9 @@ package cn.ipanel.apps.dj.hikvision.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
 
-import javax.annotation.PostConstruct;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -15,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-@Component
+@Configuration
 public class HikvisionClientConfig {
 
     private static Logger logger = LoggerFactory.getLogger(HikvisionClientConfig.class);
@@ -25,32 +24,13 @@ public class HikvisionClientConfig {
     private String hikvision_password;
     private String device;
     @Autowired
-    private  SystemConfig config1;
-    private static SystemConfig config;
-
-
-/*    private static String configPath;
-
-    @Value("${hikvision.config.location}")
-    public void setConfigPath(String configPath){
-        HikvisionClientConfig.configPath=configPath;
-    }*/
-    @PostConstruct
-    public void init() {
-        config = config1;
-    }
-
-/*    @Autowired
-    public HikvisionClientConfig(SystemConfig config){
-        HikvisionClientConfig.config=config;
-    }*/
+    private  SystemConfig config;
     /**
      * 通过配置文件夹路径读取所有指纹机配置
      * @param
      * @return
      */
-    public static List<HikvisionClientConfig> getClientConfig(){
-        int fileNum = 0;
+    public List<HikvisionClientConfig> getClientConfig(){
         logger.info("hikvision.config.location:");
         File file = new File(config.getHikvisionConfigLocation());//File(config.getHikvisionConfigLocation());
         List<HikvisionClientConfig> hikvisionClientConfigs = new ArrayList<>();
@@ -82,7 +62,6 @@ public class HikvisionClientConfig {
                     }finally {
                         try {
                             if(null != reader){
-                                //logger.info("finally:"+fileName);
                                 reader.close();
                             }
                         }catch (IOException e){
